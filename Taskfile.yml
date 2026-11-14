@@ -1,0 +1,24 @@
+version: "3"
+tasks:
+  default:
+    desc: List available tasks
+    cmd: task --list
+    silent: true
+  install:
+    desc: Download Go module dependencies
+    cmd: go mod download
+    sources: ["go.mod", "go.sum"]
+  build:
+    desc: Build the kopi binary
+    deps: [install]
+    cmd: go build -o bin/kopi .
+  test:
+    desc: "Run tests with -race (subset: task test -- ./internal/foo -run TestX)"
+    deps: [install]
+    cmd: go test -race {{.CLI_ARGS | default "./..."}}
+  lint:
+    desc: Run golangci-lint
+    cmd: golangci-lint run ./...
+  fmt:
+    desc: Format code with golangci-lint formatters
+    cmd: golangci-lint fmt ./...

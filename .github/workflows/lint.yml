@@ -1,0 +1,67 @@
+name: Lint
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  merge_group:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    # Dependabot's gomod bumps only move go.mod and go.sum, and the MegaLinter
+    # image pull is not free; test.yml builds, vets and tests those. Its
+    # github-actions bumps are the opposite case: they rewrite the action pins
+    # in these workflows, including MegaLinter's own, so actionlint and zizmor
+    # have to see them.
+    if: >-
+      github.actor != 'dependabot[bot]'
+      || startsWith(github.head_ref, 'dependabot/github_actions/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Run MegaLinter
+        uses: oxsecurity/megalinter/flavors/go@f2fe8c1cba37091848df3e524066c8c23ef353ed # v10.2.0
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          # Allowlist, not descriptors: descriptors gain linters across majors and auto-enable.
+          # Must stay on one line with no spaces after the commas: MegaLinter
+          # splits on "," without stripping, so " YAML_YAMLLINT" matches no
+          # linter and is silently dropped.
+          ENABLE_LINTERS: ACTION_ACTIONLINT,ACTION_ZIZMOR,GO_GOLANGCI_LINT,YAML_YAMLLINT,MARKDOWN_RUMDL,REPOSITORY_BETTERLEAKS
+          # Without this, MegaLinter deactivates MARKDOWN_RUMDL in favour of
+          # markdownlint even when it is the only MARKDOWN linter enabled.
+          # Config: .rumdl.toml.
+          MARKDOWN_DEFAULT_STYLE: rumdl
+          # MegaLinter classes rumdl as a formatter and defaults its findings to
+          # non-blocking; this makes them fail the gate.
+          MARKDOWN_RUMDL_DISABLE_ERRORS: false
+          # One failed online audit aborts the whole zizmor run; --offline
+          # forces offline despite GITHUB_TOKEN being set, keeping the static audits.
+          ACTION_ZIZMOR_ARGUMENTS: --offline
+          # Diff mode resolves the base as origin/$DEFAULT_BRANCH, which only
+          # exists on a pull request; push and merge_group sweep everything.
+          VALIDATE_ALL_CODEBASE: ${{ github.event_name != 'pull_request' }}
+          DEFAULT_BRANCH: ${{ github.base_ref }}
+          # go.mod pins a toolchain newer than the image's go; auto lets go download it.
+          GOTOOLCHAIN: auto
+          # The config defaults to a dotfile name; point it at the visible one so
+          # .github/linters holds no hidden files.
+          YAML_YAMLLINT_CONFIG_FILE: yamllint.yml

@@ -1,0 +1,45 @@
+# Lives at the repo root, not .github/linters: golangci-lint only discovers
+# configs named .golangci.* upward from the working directory, and a relocated
+# file would silently never load in gopls/GoLand or bare `golangci-lint run`.
+version: "2"
+
+formatters:
+  enable:
+    - gofumpt
+    - goimports
+  settings:
+    gofumpt:
+      extra-rules: true
+    goimports:
+      local-prefixes:
+        - github.com/keyute/kopi
+
+linters:
+  enable:
+    - bodyclose
+    - depguard
+    - errorlint
+    - gocritic
+  settings:
+    depguard:
+      rules:
+        pig-boundary:
+          files:
+            - "$all"
+            - "!$test"
+            - "!**/internal/pigruntime/**"
+          deny:
+            - pkg: github.com/MichaelKinsy/PiG
+              desc: only internal/pigruntime may import PiG
+        no-pig-cli:
+          deny:
+            - pkg: github.com/MichaelKinsy/PiG/coding/cli
+              desc: Kopi never embeds PiG's CLI
+  exclusions:
+    # Writing any config drops golangci's implicit standard exclusions (e.g.
+    # errcheck on `defer x.Close()`); restore them explicitly.
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
